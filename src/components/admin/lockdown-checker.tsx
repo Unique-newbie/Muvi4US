@@ -11,7 +11,12 @@ export function LockdownChecker() {
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { isLocked, lockdownUntil, isAdmin } = useAdminStore();
+    const { isLocked, lockdownUntil, isAdmin, init } = useAdminStore();
+
+    useEffect(() => {
+        // Initialize admin store
+        init();
+    }, [init]);
 
     useEffect(() => {
         // Skip if on bypass routes

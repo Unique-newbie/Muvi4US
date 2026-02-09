@@ -15,17 +15,22 @@ interface ActivityLog {
     action: string;
     details: string;
     timestamp: Date;
-    adminId: string; // Added adminId to track who performed the action
+    adminId: string;
 }
 
 interface ProxySource {
     id: string;
     name: string;
+    url?: string;
     priority: number;
     enabled: boolean;
 }
 
 interface AdminState {
+    // Initialization
+    isLoading: boolean;
+    init: () => Promise<void>;
+
     // Auth
     isAdmin: boolean;
     checkAdminStatus: () => Promise<boolean>;
@@ -35,20 +40,20 @@ interface AdminState {
     isLocked: boolean;
     lockdownMessage: string;
     lockdownUntil: Date | null;
-    isGuestLockdown: boolean; // New: Restrict access for non-logged-in users only
+    isGuestLockdown: boolean;
 
     // Featured Content Control
-    featuredContentId: string | null; // TMDB ID to PIN to hero
-    setFeaturedContentId: (id: string | null) => void;
+    featuredContentId: string | null;
+    setFeaturedContentId: (id: string | null) => Promise<void>;
 
     // Announcements
     announcements: Announcement[];
-    addAnnouncement: (message: string, type: 'info' | 'warning' | 'danger') => void;
-    removeAnnouncement: (id: string) => void;
+    addAnnouncement: (message: string, type: 'info' | 'warning' | 'danger') => Promise<void>;
+    removeAnnouncement: (id: string) => Promise<void>;
 
     // Proxy Management
     proxySources: ProxySource[];
-    toggleProxySource: (id: string) => void;
+    toggleProxySource: (id: string) => Promise<void>;
 
     // Activity Log
     activityLog: ActivityLog[];
@@ -56,15 +61,77 @@ interface AdminState {
     clearActivityLog: () => void;
 
     // Actions
-    setLockdown: (locked: boolean, message?: string, until?: Date | null) => void;
-    setGuestLockdown: (locked: boolean) => void;
+    setLockdown: (locked: boolean, message?: string, until?: Date | null) => Promise<void>;
+    setGuestLockdown: (locked: boolean) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>()(
     persist(
         (set, get) => ({
-            // Auth
+            isLoading: true,
             isAdmin: false,
+            isLocked: false,
+            lockdownMessage: 'Establishment is under heavy raid. Come back later.',
+            lockdownUntil: null,
+            isGuestLockdown: false,
+            featuredContentId: null,
+            announcements: [],
+            proxySources: [
+                { id: 'vidsrc', name: 'VidSrc', url: 'https://vidsrc.xyz/embed', priority: 1, enabled: true },
+                { id: 'superembed', name: 'SuperEmbed', url: '', priority: 2, enabled: true },
+                { id: '2embed', name: '2Embed', url: '', priority: 3, enabled: false },
+            ],
+            activityLog: [],
+
+            init: async () => {
+                const supabase = getSupabaseClient();
+                if (!supabase) return;
+
+                set({ isLoading: true });
+
+                try {
+                    // 1. Fetch App Settings
+                    const { data: settings } = await supabase.from('app_settings').select('*').single();
+                    if (settings) {
+                        set({
+                            isLocked: settings.is_locked,
+                            lockdownMessage: settings.lockdown_message || 'Establishment is under heavy raid. Come back later.',
+                            lockdownUntil: settings.lockdown_until,
+                            isGuestLockdown: settings.is_guest_lockdown,
+                            featuredContentId: settings.featured_content_id
+                        });
+                    }
+
+                    // 2. Fetch Announcements
+                    const { data: dbAnnouncements } = await supabase
+                        .from('announcements')
+                        .select('*')
+                        .eq('is_active', true)
+                        .order('created_at', { ascending: false });
+
+                    if (dbAnnouncements) {
+                        set({
+                            announcements: dbAnnouncements.map((a: any) => ({
+                                id: a.id,
+                                message: a.message,
+                                type: a.type as 'info' | 'warning' | 'danger',
+                                active: a.is_active,
+                                createdAt: new Date(a.created_at)
+                            }))
+                        });
+                    }
+
+                    // 3. Fetch Proxy Sources (if we had them in DB, for now we merge with local defaults or just use local)
+                    // Since existing users rely on hardcoded IDs, we'll keep the structure but ideally fetch status.
+                    // For this iteration, we'll stick to local state for ProxySources TO AVOID BREAKING PLAYBACK
+                    // until we confirm the DB table 'proxy_sources' is populated with the correct URLs.
+
+                } catch (error) {
+                    console.error('Failed to init admin store:', error);
+                } finally {
+                    set({ isLoading: false });
+                }
+            },
 
             checkAdminStatus: async () => {
                 const supabase = getSupabaseClient();
@@ -99,67 +166,99 @@ export const useAdminStore = create<AdminState>()(
                 set({ isAdmin: false });
             },
 
-            // Site Lockdown
-            isLocked: false,
-            lockdownMessage: 'Establishment is under heavy raid. Come back later.', // Pirate themed
-            lockdownUntil: null,
-            isGuestLockdown: false,
-
-            // Featured Content
-            featuredContentId: null,
-            setFeaturedContentId: (id) => set({ featuredContentId: id }),
-
-            // Announcements
-            announcements: [],
-
-            // Proxy Management
-            proxySources: [
-                { id: 'vidsrc', name: 'VidSrc', priority: 1, enabled: true },
-                { id: 'superembed', name: 'SuperEmbed', priority: 2, enabled: true },
-                { id: '2embed', name: '2Embed', priority: 3, enabled: false },
-            ],
-
-            // Activity Log
-            activityLog: [],
-
-            // Actions
-            setLockdown: (locked, message, until) => {
+            // Actions interacting with Supabase
+            setLockdown: async (locked, message, until) => {
+                // Optimistic update
                 set({
                     isLocked: locked,
                     lockdownMessage: message || get().lockdownMessage,
                     lockdownUntil: until || null
                 });
-                get().logActivity('LOCKDOWN', `Site ${locked ? 'locked' : 'unlocked'}`);
+
+                const supabase = getSupabaseClient();
+                if (supabase && get().isAdmin) {
+                    await supabase.from('app_settings').upsert({
+                        id: 1, // Singleton row
+                        is_locked: locked,
+                        lockdown_message: message || get().lockdownMessage,
+                        lockdown_until: until
+                    });
+                    get().logActivity('LOCKDOWN', `Site ${locked ? 'locked' : 'unlocked'}`);
+                }
             },
 
-            setGuestLockdown: (locked) => {
+            setGuestLockdown: async (locked) => {
                 set({ isGuestLockdown: locked });
-                get().logActivity('GUEST_LOCKDOWN', `Guest access ${locked ? 'restricted' : 'allowed'}`);
+                const supabase = getSupabaseClient();
+                if (supabase && get().isAdmin) {
+                    await supabase.from('app_settings').upsert({
+                        id: 1,
+                        is_guest_lockdown: locked
+                    });
+                    get().logActivity('GUEST_LOCKDOWN', `Guest access ${locked ? 'restricted' : 'allowed'}`);
+                }
             },
 
-            addAnnouncement: (message, type) => set((state) => ({
-                announcements: [
-                    {
-                        id: Math.random().toString(36).substring(7),
+            setFeaturedContentId: async (id) => {
+                set({ featuredContentId: id });
+                const supabase = getSupabaseClient();
+                if (supabase && get().isAdmin) {
+                    await supabase.from('app_settings').upsert({
+                        id: 1,
+                        featured_content_id: id ? parseInt(id) : null
+                    });
+                }
+            },
+
+            addAnnouncement: async (message, type) => {
+                const tempId = Math.random().toString(36).substring(7);
+                const newAnnouncement: Announcement = {
+                    id: tempId,
+                    message,
+                    type,
+                    active: true,
+                    createdAt: new Date(),
+                };
+
+                set((state) => ({ announcements: [newAnnouncement, ...state.announcements] }));
+
+                const supabase = getSupabaseClient();
+                if (supabase && get().isAdmin) {
+                    const { data, error } = await supabase.from('announcements').insert({
                         message,
                         type,
-                        active: true,
-                        createdAt: new Date(),
-                    },
-                    ...state.announcements,
-                ],
-            })),
+                        is_active: true
+                    }).select().single();
 
-            removeAnnouncement: (id) => set((state) => ({
-                announcements: state.announcements.filter((a) => a.id !== id),
-            })),
+                    if (data && !error) {
+                        // Update with real ID
+                        set((state) => ({
+                            announcements: state.announcements.map(a =>
+                                a.id === tempId ? { ...a, id: data.id } : a
+                            )
+                        }));
+                    }
+                }
+            },
 
-            toggleProxySource: (id) => {
+            removeAnnouncement: async (id) => {
+                set((state) => ({
+                    announcements: state.announcements.filter((a) => a.id !== id),
+                }));
+
+                const supabase = getSupabaseClient();
+                if (supabase && get().isAdmin) {
+                    await supabase.from('announcements').update({ is_active: false }).eq('id', id);
+                }
+            },
+
+            toggleProxySource: async (id) => {
                 set((state) => ({
                     proxySources: state.proxySources.map((s) =>
                         s.id === id ? { ...s, enabled: !s.enabled } : s
                     ),
                 }));
+                // TODO: Wire this to Supabase when proxy_sources table is ready and populated
                 const source = get().proxySources.find((s) => s.id === id);
                 if (source) {
                     get().logActivity('PROXY_TOGGLED', `${source.name}: ${source.enabled ? 'Enabled' : 'Disabled'}`);
@@ -167,7 +266,6 @@ export const useAdminStore = create<AdminState>()(
             },
 
             logActivity: (action, details) => {
-                // In a real app, you would log this to the DB
                 console.log(`[Admin Activity] ${action}: ${details}`);
                 set((state) => ({
                     activityLog: [
@@ -176,10 +274,10 @@ export const useAdminStore = create<AdminState>()(
                             action,
                             details,
                             timestamp: new Date(),
-                            adminId: 'current-user-id', // Placeholder, ideally get from auth
+                            adminId: 'current-user-id',
                         },
                         ...state.activityLog,
-                    ].slice(0, 100), // Keep last 100 actions
+                    ].slice(0, 100),
                 }));
             },
 
@@ -188,15 +286,10 @@ export const useAdminStore = create<AdminState>()(
         {
             name: 'admin-storage',
             partialize: (state) => ({
-                isLocked: state.isLocked,
-                lockdownMessage: state.lockdownMessage,
-                lockdownUntil: state.lockdownUntil,
-                isGuestLockdown: state.isGuestLockdown,
-                featuredContentId: state.featuredContentId,
-                announcements: state.announcements,
-                proxySources: state.proxySources,
+                // Only persist activity log and maybe proxy sources locally for now
                 activityLog: state.activityLog,
-                // Don't persist isAdmin for security, re-check on load
+                proxySources: state.proxySources,
+                // Do NOT persist lockdown/announcements as they should come from DB
             }),
         }
     )

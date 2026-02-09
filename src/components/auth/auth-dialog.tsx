@@ -69,8 +69,13 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
         if (error) {
             setError(error.message);
         } else {
-            setSuccess('Check your email to verify your account!');
+            setSuccess('Account created! You can now sign in.');
             resetForm();
+            // Optional: Automatically switch to sign in tab after a delay
+            setTimeout(() => {
+                const signInTrigger = document.querySelector('[value="signin"]') as HTMLElement;
+                if (signInTrigger) signInTrigger.click();
+            }, 2000);
         }
 
         setIsLoading(false);

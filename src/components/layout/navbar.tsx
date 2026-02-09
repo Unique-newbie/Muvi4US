@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { UserButton } from '@/components/auth';
 import { cn } from '@/lib/utils';
+import { SearchBar } from '@/components/search/search-bar';
 
 const navLinks = [
     { href: '/', label: 'Home', icon: Flame },
@@ -20,15 +21,7 @@ const navLinks = [
 
 export function Navbar() {
     const pathname = usePathname();
-    const [searchQuery, setSearchQuery] = useState('');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (searchQuery.trim()) {
-            window.location.href = `/search?q=${encodeURIComponent(searchQuery.trim())}`;
-        }
-    };
 
     return (
         <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-xl">
@@ -67,18 +60,9 @@ export function Navbar() {
                 </nav>
 
                 {/* Search */}
-                <form onSubmit={handleSearch} className="hidden w-full max-w-sm lg:flex">
-                    <div className="relative w-full">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                        <Input
-                            type="search"
-                            placeholder="Search movies, TV shows..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full border-white/10 bg-white/5 pl-10 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500/20"
-                        />
-                    </div>
-                </form>
+                <div className="hidden w-full max-w-sm lg:flex">
+                    <SearchBar />
+                </div>
 
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-2">
@@ -103,18 +87,9 @@ export function Navbar() {
             {/* Mobile Menu */}
             {mobileMenuOpen && (
                 <div className="border-t border-white/10 bg-black/95 p-4 md:hidden">
-                    <form onSubmit={handleSearch} className="mb-4">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                            <Input
-                                type="search"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full border-white/10 bg-white/5 pl-10 text-white placeholder:text-gray-500"
-                            />
-                        </div>
-                    </form>
+                    <div className="mb-4">
+                        <SearchBar onSearchSubmit={() => setMobileMenuOpen(false)} />
+                    </div>
                     <nav className="flex flex-col gap-1">
                         {navLinks.map((link) => {
                             const Icon = link.icon;

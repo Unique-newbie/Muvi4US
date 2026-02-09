@@ -16,11 +16,48 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { useAppStore } from '@/store/app-store';
+import { useAuth } from '@/components/auth/auth-provider';
+import { AuthDialog } from '@/components/auth/auth-dialog';
 
 export default function ProfilePage() {
+    const { user, isLoading: isAuthLoading } = useAuth();
     const { theme, setTheme, watchlist, watchHistory, clearWatchHistory, recentSearches, clearRecentSearches } = useAppStore();
     const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
     const [clearSearchesOpen, setClearSearchesOpen] = useState(false);
+    const [showAuthDialog, setShowAuthDialog] = useState(false);
+
+    // Show loading state while checking auth
+    if (isAuthLoading) {
+        return (
+            <div className="flex h-[50vh] items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-500 border-t-transparent"></div>
+            </div>
+        );
+    }
+
+    // Show Access Denied / Sign In prompt if not logged in
+    if (!user) {
+        return (
+            <div className="container mx-auto flex h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+                <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
+                    <User className="h-10 w-10 text-red-500" />
+                </div>
+                <h1 className="mb-2 text-2xl font-bold text-white">Guest Access</h1>
+                <p className="mb-8 text-gray-400">
+                    Sign in to view your profile, manage your watchlist, and sync your watch history across devices.
+                </p>
+                <Button
+                    size="lg"
+                    className="bg-red-500 text-white hover:bg-red-600"
+                    onClick={() => setShowAuthDialog(true)}
+                >
+                    Sign In / Register
+                </Button>
+
+                <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
+            </div>
+        );
+    }
 
     const stats = {
         watchlist: watchlist.length,
@@ -45,11 +82,26 @@ export default function ProfilePage() {
             {/* Profile Header - Compact on mobile */}
             <div className="mb-6 md:mb-8 flex items-center gap-4 md:gap-6">
                 <div className="flex h-16 w-16 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex-shrink-0">
-                    <User className="h-8 w-8 md:h-12 md:w-12 text-white" />
+                    {user.user_metadata?.avatar_url ? (
+                        <img
+                            src={user.user_metadata.avatar_url}
+                            alt={user.user_metadata?.full_name || 'User'}
+                            className="h-full w-full rounded-full object-cover"
+                        />
+                    ) : (
+                        <span className="text-2xl md:text-4xl font-bold text-white">
+                            {(user.user_metadata?.full_name?.[0] || user.email?.[0] || 'U').toUpperCase()}
+                        </span>
+                    )}
                 </div>
                 <div className="min-w-0">
-                    <h1 className="text-xl md:text-3xl font-bold text-white">Your Profile</h1>
-                    <p className="mt-0.5 md:mt-1 text-xs md:text-base text-gray-400 truncate">Manage your preferences</p>
+                    <h1 className="text-xl md:text-3xl font-bold text-white">
+                        {user.user_metadata?.full_name || user.user_metadata?.username || 'User'}
+                    </h1>
+                    <p className="text-sm text-gray-400">{user.email}</p>
+                    <p className="mt-0.5 md:mt-1 text-xs md:text-sm text-gray-500 truncate">
+                        Member since {new Date(user.created_at).toLocaleDateString()}
+                    </p>
                 </div>
             </div>
 
