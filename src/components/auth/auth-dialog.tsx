@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from './auth-provider';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User } from 'lucide-react';
 
 interface AuthDialogProps {
     open: boolean;
@@ -16,6 +16,7 @@ interface AuthDialogProps {
 export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     const { signIn, signUp, isConfigured } = useAuth();
     const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -57,7 +58,13 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
             return;
         }
 
-        const { error } = await signUp(email, password);
+        if (username.length < 3) {
+            setError('Username must be at least 3 characters');
+            setIsLoading(false);
+            return;
+        }
+
+        const { error } = await signUp(email, password, username);
 
         if (error) {
             setError(error.message);
@@ -73,6 +80,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
 
     const resetForm = () => {
         setEmail('');
+        setUsername('');
         setPassword('');
         setConfirmPassword('');
         setError(null);
@@ -189,6 +197,17 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
                             </div>
                         ) : (
                             <form onSubmit={handleSignUp} className="space-y-4">
+                                <div className="relative">
+                                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <Input
+                                        type="text"
+                                        placeholder="Username"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        required
+                                        className="border-white/10 bg-gray-800 pl-10 text-white"
+                                    />
+                                </div>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                                     <Input
