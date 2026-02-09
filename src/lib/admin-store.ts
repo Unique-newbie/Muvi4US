@@ -62,6 +62,7 @@ interface AdminState {
 
     // Actions
     setLockdown: (locked: boolean, message?: string, until?: Date | null) => Promise<void>;
+    setGuestLockdown: (locked: boolean) => Promise<void>;
     // Real-time Subscription
     subscribe: () => Promise<() => void>;
 }
