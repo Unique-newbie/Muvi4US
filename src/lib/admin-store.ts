@@ -62,7 +62,8 @@ interface AdminState {
 
     // Actions
     setLockdown: (locked: boolean, message?: string, until?: Date | null) => Promise<void>;
-    setGuestLockdown: (locked: boolean) => Promise<void>;
+    // Real-time Subscription
+    subscribe: () => Promise<() => void>;
 }
 
 export const useAdminStore = create<AdminState>()(
@@ -121,16 +122,61 @@ export const useAdminStore = create<AdminState>()(
                         });
                     }
 
-                    // 3. Fetch Proxy Sources (if we had them in DB, for now we merge with local defaults or just use local)
-                    // Since existing users rely on hardcoded IDs, we'll keep the structure but ideally fetch status.
-                    // For this iteration, we'll stick to local state for ProxySources TO AVOID BREAKING PLAYBACK
-                    // until we confirm the DB table 'proxy_sources' is populated with the correct URLs.
-
                 } catch (error) {
                     console.error('Failed to init admin store:', error);
                 } finally {
                     set({ isLoading: false });
                 }
+            },
+
+            subscribe: async () => {
+                const supabase = getSupabaseClient();
+                if (!supabase) return () => { };
+
+                const channel = supabase.channel('admin_updates')
+                    .on(
+                        'postgres_changes',
+                        { event: 'UPDATE', schema: 'public', table: 'app_settings', filter: 'id=eq.1' },
+                        (payload: any) => {
+                            const newSettings = payload.new;
+                            set({
+                                isLocked: newSettings.is_locked,
+                                lockdownMessage: newSettings.lockdown_message,
+                                lockdownUntil: newSettings.lockdown_until,
+                                isGuestLockdown: newSettings.is_guest_lockdown,
+                                featuredContentId: newSettings.featured_content_id
+                            });
+                        }
+                    )
+                    .on(
+                        'postgres_changes',
+                        { event: '*', schema: 'public', table: 'announcements' },
+                        async (payload: any) => {
+                            // Refresh announcements on any change to ensure consistency
+                            const { data: dbAnnouncements } = await supabase
+                                .from('announcements')
+                                .select('*')
+                                .eq('is_active', true)
+                                .order('created_at', { ascending: false });
+
+                            if (dbAnnouncements) {
+                                set({
+                                    announcements: dbAnnouncements.map((a: any) => ({
+                                        id: a.id,
+                                        message: a.message,
+                                        type: a.type as 'info' | 'warning' | 'danger',
+                                        active: a.is_active,
+                                        createdAt: new Date(a.created_at)
+                                    }))
+                                });
+                            }
+                        }
+                    )
+                    .subscribe();
+
+                return () => {
+                    supabase.removeChannel(channel);
+                };
             },
 
             checkAdminStatus: async () => {
@@ -167,7 +213,7 @@ export const useAdminStore = create<AdminState>()(
             },
 
             // Actions interacting with Supabase
-            setLockdown: async (locked, message, until) => {
+            setLockdown: async (locked: boolean, message?: string, until?: Date | null) => {
                 // Optimistic update
                 set({
                     isLocked: locked,
@@ -187,7 +233,7 @@ export const useAdminStore = create<AdminState>()(
                 }
             },
 
-            setGuestLockdown: async (locked) => {
+            setGuestLockdown: async (locked: boolean) => {
                 set({ isGuestLockdown: locked });
                 const supabase = getSupabaseClient();
                 if (supabase && get().isAdmin) {
@@ -231,12 +277,12 @@ export const useAdminStore = create<AdminState>()(
                     }).select().single();
 
                     if (data && !error) {
-                        // Update with real ID
-                        set((state) => ({
-                            announcements: state.announcements.map(a =>
-                                a.id === tempId ? { ...a, id: data.id } : a
-                            )
-                        }));
+                        // Update with real ID - functionality handled by subscription normally, 
+                        // but we keep local update for immediate feedback if sub is slow
+                        // Actually, let's rely on the subscription for the final state to avoid conflicts/dupes
+                        // But we keep the optimistic update for UI responsiveness.
+
+                        // The subscription will re-fetch properly.
                     }
                 }
             },
