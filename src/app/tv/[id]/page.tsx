@@ -15,37 +15,11 @@ interface TVShowPageProps {
     searchParams: Promise<{ season?: string; episode?: string }>;
 }
 
-// Mock video sources for TV episodes
-function getEpisodeSources(showId: number, season: number, episode: number): VideoSource[] {
-    return [
-        {
-            id: `vidsrc-${showId}-${season}-${episode}`,
-            name: 'VidSrc',
-            embedUrl: `https://vidsrc.xyz/embed/tv/${showId}/${season}/${episode}`,
-            quality: '1080p',
-            language: 'English',
-            isWorking: true,
-            lastChecked: new Date(),
-        },
-        {
-            id: `vidsrc2-${showId}-${season}-${episode}`,
-            name: 'VidSrc Pro',
-            embedUrl: `https://vidsrc.pro/embed/tv/${showId}/${season}/${episode}`,
-            quality: '1080p',
-            language: 'English',
-            isWorking: true,
-            lastChecked: new Date(),
-        },
-        {
-            id: `2embed-${showId}-${season}-${episode}`,
-            name: '2Embed',
-            embedUrl: `https://www.2embed.cc/embedtv/${showId}&s=${season}&e=${episode}`,
-            quality: '720p',
-            language: 'English',
-            isWorking: true,
-            lastChecked: new Date(),
-        },
-    ];
+import { getSources } from '@/lib/sources';
+
+interface TVShowPageProps {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ season?: string; episode?: string }>;
 }
 
 export default async function TVShowPage({ params, searchParams }: TVShowPageProps) {
@@ -77,7 +51,7 @@ export default async function TVShowPage({ params, searchParams }: TVShowPagePro
         episodes = [];
     }
 
-    const sources = getEpisodeSources(showId, currentSeason, currentEpisode);
+    const sources = await getSources(id, 'tv', currentSeason, currentEpisode);
     const year = show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined;
     const currentEpisodeData = episodes.find(ep => ep.episode_number === currentEpisode);
 

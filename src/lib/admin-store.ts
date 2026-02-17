@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSupabaseClient } from '@/lib/supabase';
+import { FALLBACK_SOURCES } from '@/lib/sources';
 
 interface Announcement {
     id: string;
@@ -24,6 +25,7 @@ interface ProxySource {
     url?: string;
     priority: number;
     enabled: boolean;
+    type?: string;
 }
 
 interface AdminState {
@@ -78,11 +80,7 @@ export const useAdminStore = create<AdminState>()(
             isGuestLockdown: false,
             featuredContentId: null,
             announcements: [],
-            proxySources: [
-                { id: 'vidsrc', name: 'VidSrc', url: 'https://vidsrc.xyz/embed', priority: 1, enabled: true },
-                { id: 'superembed', name: 'SuperEmbed', url: '', priority: 2, enabled: true },
-                { id: '2embed', name: '2Embed', url: '', priority: 3, enabled: false },
-            ],
+            proxySources: FALLBACK_SOURCES,
             activityLog: [],
 
             init: async () => {

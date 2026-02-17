@@ -12,37 +12,10 @@ interface MoviePageProps {
     params: Promise<{ id: string }>;
 }
 
-// Mock video sources - In production, these would come from your scraper database
-function getMockSources(movieId: number): VideoSource[] {
-    return [
-        {
-            id: `vidsrc-${movieId}`,
-            name: 'VidSrc',
-            embedUrl: `https://vidsrc.xyz/embed/movie/${movieId}`,
-            quality: '1080p',
-            language: 'English',
-            isWorking: true,
-            lastChecked: new Date(),
-        },
-        {
-            id: `vidsrc2-${movieId}`,
-            name: 'VidSrc Pro',
-            embedUrl: `https://vidsrc.pro/embed/movie/${movieId}`,
-            quality: '1080p',
-            language: 'English',
-            isWorking: true,
-            lastChecked: new Date(),
-        },
-        {
-            id: `2embed-${movieId}`,
-            name: '2Embed',
-            embedUrl: `https://www.2embed.cc/embed/${movieId}`,
-            quality: '720p',
-            language: 'English',
-            isWorking: true,
-            lastChecked: new Date(),
-        },
-    ];
+import { getSources } from '@/lib/sources';
+
+interface MoviePageProps {
+    params: Promise<{ id: string }>;
 }
 
 export default async function MoviePage({ params }: MoviePageProps) {
@@ -60,7 +33,7 @@ export default async function MoviePage({ params }: MoviePageProps) {
         notFound();
     }
 
-    const sources = getMockSources(movieId);
+    const sources = await getSources(id, 'movie');
     const year = movie.release_date ? new Date(movie.release_date).getFullYear() : undefined;
     const runtime = movie.runtime ? `${Math.floor(movie.runtime / 60)}h ${movie.runtime % 60}m` : 'N/A';
 
