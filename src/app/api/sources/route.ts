@@ -18,38 +18,36 @@ export async function GET(request: Request) {
     try {
         console.log(`[Scraper] Searching for: ${title} (${year})`);
 
-        // 1. Search for the movie
+        // 1. Search for the movie using ALL providers
         // We append year to query for better accuracy
         const query = `${title} ${year || ''}`;
-        const searchResults = await scraperEngine.providers[0].search(query);
+        const searchResults = await scraperEngine.searchAll(query);
 
         if (searchResults.length === 0) {
             return NextResponse.json({ sources: [] });
         }
 
-        // 2. Resolve the first result (basic logic)
-        // In a real app, you'd match years/titles more strictly
-        const bestMatch = searchResults[0];
-        console.log(`[Scraper] Best match: ${bestMatch.title}`);
+        // 2. Loop through results to find the first working stream
+        for (const result of searchResults) {
+            if (!result.id) continue;
 
-        if (!bestMatch.id) {
-            return NextResponse.json({ sources: [] });
-        }
+            // Determine provider from ID prefix or metadata. 
+            // Our engine examples are simple, so we check if ID implies test or archive
+            let providerName = 'Archive.org';
+            if (result.id === 'bbb-test') providerName = 'Test Source (Big Buck Bunny)';
 
-        const sourceUrl = await scraperEngine.providers[0].getStreamUrl(bestMatch.id);
+            console.log(`[Scraper] Checking stream for: ${result.title} (${providerName})`);
 
-        if (sourceUrl) {
-            return NextResponse.json({
-                sources: [{
-                    id: `archive-${bestMatch.id}`,
-                    name: 'Archive.org (Public Domain)',
-                    embedUrl: sourceUrl,
-                    quality: '1080p',
-                    language: 'English',
-                    isWorking: true,
-                    lastChecked: new Date()
-                }]
-            });
+            try {
+                const source = await scraperEngine.getSource(providerName, result.id);
+                if (source) {
+                    return NextResponse.json({
+                        sources: [source]
+                    });
+                }
+            } catch (e) {
+                console.error(`[Scraper] Failed to get stream from ${providerName}`, e);
+            }
         }
 
         return NextResponse.json({ sources: [] });

@@ -65,9 +65,30 @@ export const ArchiveOrgProvider: ScraperProvider = {
     }
 };
 
+// Test Provider: Big Buck Bunny (Always works for testing)
+export const TestProvider: ScraperProvider = {
+    name: 'Test Source (Big Buck Bunny)',
+    baseUrl: 'https://test.com',
+    isEnabled: true,
+
+    async search(query: string): Promise<SearchResult[]> {
+        // Always return a result for testing
+        return [{
+            title: 'Big Buck Bunny (Test)',
+            url: 'https://test.com/bbb',
+            year: '2008',
+            id: 'bbb-test'
+        }];
+    },
+
+    async getStreamUrl(id: string): Promise<string | null> {
+        return 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+    }
+};
+
 // Main Scraper Engine
 export class ScraperEngine {
-    providers: ScraperProvider[] = [ArchiveOrgProvider];
+    providers: ScraperProvider[] = [ArchiveOrgProvider, TestProvider];
 
     async searchAll(query: string): Promise<SearchResult[]> {
         const results: SearchResult[] = [];
