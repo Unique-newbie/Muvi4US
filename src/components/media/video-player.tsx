@@ -1,7 +1,6 @@
-'use client';
 
-import { useState } from 'react';
-import { AlertCircle, Loader2, RefreshCw, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertCircle, Loader2, RefreshCw, ExternalLink, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -10,12 +9,67 @@ import type { VideoSource } from '@/types';
 interface VideoPlayerProps {
     sources: VideoSource[];
     title: string;
+    // Metadata for fetching extra sources
+    tmdbId?: string;
+    type?: 'movie' | 'tv';
+    year?: number;
+    season?: number;
+    episode?: number;
 }
 
-export function VideoPlayer({ sources, title }: VideoPlayerProps) {
-    const [activeSource, setActiveSource] = useState<VideoSource | null>(sources[0] || null);
+export function VideoPlayer({ sources: initialSources, title, tmdbId, type, year, season, episode }: VideoPlayerProps) {
+    const [sources, setSources] = useState<VideoSource[]>(initialSources);
+    const [activeSource, setActiveSource] = useState<VideoSource | null>(initialSources[0] || null);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
+    const [isScraping, setIsScraping] = useState(false);
+
+    // Fetch extra sources on mount
+    useEffect(() => {
+        const fetchExtraSources = async () => {
+            if (!tmdbId || !type) return;
+
+            setIsScraping(true);
+            try {
+                const params = new URLSearchParams({
+                    tmdbId,
+                    title,
+                    type,
+                    year: year ? year.toString() : '',
+                    season: season ? season.toString() : '',
+                    episode: episode ? episode.toString() : ''
+                });
+
+                const res = await fetch(`/api/sources?${params.toString()}`);
+                const data = await res.json();
+
+                if (data.sources && data.sources.length > 0) {
+                    setSources(prev => {
+                        // Avoid duplicates
+                        const newSources = data.sources.filter((s: VideoSource) =>
+                            !prev.some(p => p.id === s.id)
+                        );
+                        return [...prev, ...newSources];
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to scrape extra sources:', error);
+            } finally {
+                setIsScraping(false);
+            }
+        };
+
+        fetchExtraSources();
+    }, [tmdbId, title, type, year, season, episode]);
+
+    // Update active source if initial sources change (e.g. strict mode)
+    useEffect(() => {
+        if (initialSources.length > 0 && sources.length === 0) {
+            setSources(initialSources);
+            setActiveSource(initialSources[0]);
+        }
+    }, [initialSources]);
+
 
     const handleSourceChange = (source: VideoSource) => {
         setActiveSource(source);
@@ -98,35 +152,42 @@ export function VideoPlayer({ sources, title }: VideoPlayerProps) {
             </div>
 
             {/* Source Selector */}
-            {sources.length > 1 && (
-                <div className="space-y-2">
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-gray-400">Available Sources</p>
-                    <div className="flex flex-wrap gap-2">
-                        {sources.map((source) => (
-                            <Button
-                                key={source.id}
-                                variant={activeSource.id === source.id ? 'default' : 'outline'}
-                                size="sm"
-                                className={cn(
-                                    'gap-2',
-                                    activeSource.id === source.id
-                                        ? 'bg-red-500 text-white hover:bg-red-600'
-                                        : 'border-white/20 text-gray-300 hover:bg-white/10'
-                                )}
-                                onClick={() => handleSourceChange(source)}
-                            >
-                                {source.name}
-                                <Badge
-                                    variant="secondary"
-                                    className="bg-black/30 text-xs"
-                                >
-                                    {source.quality}
-                                </Badge>
-                            </Button>
-                        ))}
-                    </div>
+                    {isScraping && (
+                        <div className="flex items-center gap-2 text-xs text-blue-400">
+                            <Activity className="h-3 w-3 animate-pulse" />
+                            Processing extra sources...
+                        </div>
+                    )}
                 </div>
-            )}
+
+                <div className="flex flex-wrap gap-2">
+                    {sources.map((source) => (
+                        <Button
+                            key={source.id}
+                            variant={activeSource.id === source.id ? 'default' : 'outline'}
+                            size="sm"
+                            className={cn(
+                                'gap-2',
+                                activeSource.id === source.id
+                                    ? 'bg-red-500 text-white hover:bg-red-600'
+                                    : 'border-white/20 text-gray-300 hover:bg-white/10'
+                            )}
+                            onClick={() => handleSourceChange(source)}
+                        >
+                            {source.name}
+                            <Badge
+                                variant="secondary"
+                                className="bg-black/30 text-xs"
+                            >
+                                {source.quality}
+                            </Badge>
+                        </Button>
+                    ))}
+                </div>
+            </div>
 
             {/* External Link */}
             <div className="flex items-center justify-end">

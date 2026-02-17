@@ -211,6 +211,11 @@ export default async function TVShowPage({ params, searchParams }: TVShowPagePro
                         <VideoPlayer
                             sources={sources}
                             title={`${show.name} S${currentSeason}E${currentEpisode}`}
+                            tmdbId={id}
+                            type="tv"
+                            year={year}
+                            season={currentSeason}
+                            episode={currentEpisode}
                         />
 
                         {/* Season & Episode Selector */}

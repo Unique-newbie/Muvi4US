@@ -185,7 +185,13 @@ export default async function MoviePage({ params }: MoviePageProps) {
                                     More Sources
                                 </Button>
                             </div>
-                            <VideoPlayer sources={sources} title={movie.title} />
+                            <VideoPlayer
+                                sources={sources}
+                                title={movie.title}
+                                tmdbId={id}
+                                type="movie"
+                                year={year}
+                            />
                         </div>
 
                         {/* Additional Info */}
