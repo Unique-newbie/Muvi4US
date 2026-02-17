@@ -41,8 +41,10 @@ export function VideoPlayer({ sources: initialSources, title, tmdbId, type, year
                     episode: episode ? episode.toString() : ''
                 });
 
+                console.log('[VideoPlayer] Fetching extra sources:', `/api/sources?${params.toString()}`);
                 const res = await fetch(`/api/sources?${params.toString()}`);
                 const data = await res.json();
+                console.log('[VideoPlayer] Scraper response:', data);
 
                 if (data.sources && data.sources.length > 0) {
                     setSources(prev => {
