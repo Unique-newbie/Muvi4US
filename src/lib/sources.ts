@@ -4,6 +4,14 @@ import type { VideoSource } from '@/types';
 // Fallback sources if DB is empty or fails
 export const FALLBACK_SOURCES = [
     {
+        id: 'vidsrcvip',
+        name: 'VidSrc VIP (Fast)',
+        url: 'https://vidsrc.vip/embed',
+        priority: 0,
+        enabled: true,
+        type: 'iframe'
+    },
+    {
         id: 'vidsrc',
         name: 'VidSrc',
         url: 'https://vidsrc.xyz/embed', // Base URL
@@ -81,8 +89,8 @@ export async function getSources(
         let embedUrl = source.url || '';
 
         // URL Processing Logic
-        // VidSrc & VidSrc Pro
-        if (source.id === 'vidsrc' || source.id?.includes('vidsrc')) {
+        // VidSrc, VidSrc Pro, VidSrc VIP
+        if (source.id === 'vidsrc' || source.id === 'vidsrcvip' || source.id?.includes('vidsrc')) {
             // Remove trailing slashes if any
             const base = embedUrl.replace(/\/$/, '');
             if (type === 'movie') {
